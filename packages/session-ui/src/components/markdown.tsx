@@ -39,6 +39,14 @@ type RenderedBlock =
       stable: MarkdownToken[]
       unstable: MarkdownToken[]
     }
+  | {
+      key: string
+      mode: "echarts"
+      raw: string
+      hash: string
+      option: string
+      complete: boolean
+    }
 
 type RenderResult = {
   text: string
@@ -57,7 +65,7 @@ function escape(text: string) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;")
 }
 
@@ -325,6 +333,16 @@ export function Markdown(
           const blockKey = markdownBlockKey(owner, src.key, index, block.mode)
 
           if (block.mode === "code") {
+            if (block.language === "echarts") {
+              return {
+                key: blockKey,
+                mode: "echarts" as const,
+                raw: block.raw,
+                hash: String(block.raw.length),
+                option: block.src,
+                complete: !!block.complete,
+              } satisfies RenderedBlock
+            }
             const cached = completedCode.get(blockKey)
             if (block.complete && cached?.raw === block.raw) return cached
             const result = await code(block.src, block.language, blockKey, block.complete)
@@ -446,6 +464,16 @@ function pendingBlocks(
     const key = markdownBlockKey(owner, cacheKey, index, block.mode)
     if (block.mode !== "code")
       return { key, mode: block.mode, raw: block.raw, hash: String(block.raw.length), html: fallback(block.src) }
+    if (block.language === "echarts") {
+      return {
+        key,
+        mode: "echarts" as const,
+        raw: block.raw,
+        hash: String(block.raw.length),
+        option: block.src,
+        complete: !!block.complete,
+      } satisfies RenderedBlock
+    }
     return {
       key,
       mode: block.mode,
@@ -468,6 +496,10 @@ function updateBlock(container: HTMLDivElement, index: number, block: RenderedBl
   const current = container.children[index]
   if (block.mode === "code") {
     updateCodeBlock(container, current, block, labels)
+    return
+  }
+  if (block.mode === "echarts") {
+    updateEChartsBlock(container, current, block)
     return
   }
   if (
@@ -570,6 +602,69 @@ function updateCodeBlock(
   })
   if (current) current.replaceWith(next)
   else container.appendChild(next)
+}
+
+function updateEChartsBlock(
+  container: HTMLDivElement,
+  current: Element | undefined,
+  block: Extract<RenderedBlock, { mode: "echarts" }>,
+) {
+  const id = `ec-${block.key.replace(/[^a-zA-Z0-9-]/g, "")}`
+  const existing = current instanceof HTMLDivElement && current.dataset.markdownKey === block.key ? current : undefined
+  if (existing && existing.dataset.echartsOption === block.option) return
+
+  const el = document.createElement("div")
+  el.id = id
+  el.dataset.markdownBlock = ""
+  el.dataset.markdownKey = block.key
+  el.dataset.markdownHash = block.hash
+  el.dataset.echartsOption = block.option
+  el.style.cssText = "width:100%;height:400px;min-height:300px"
+
+  if (existing) {
+    existing.replaceWith(el)
+  } else if (current) {
+    current.replaceWith(el)
+  } else {
+    container.appendChild(el)
+  }
+
+  scheduleECharts(id, block.option)
+}
+
+const echartsLoadingPromise: Promise<void> | null = null
+
+function ensureEChartsLoaded(): Promise<void> {
+  if ((window as any).echarts) return Promise.resolve()
+  if (echartsLoadingPromise) return echartsLoadingPromise
+  return new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script")
+    script.src = "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
+    script.onload = () => resolve()
+    script.onerror = () => resolve() // resolve anyway to avoid breaking the UI
+    document.head.appendChild(script)
+  }) as Promise<void>
+}
+
+function scheduleECharts(id: string, optionJson: string) {
+  queueMicrotask(async () => {
+    const el = document.getElementById(id)
+    if (!el) return
+    try {
+      await ensureEChartsLoaded()
+      const w = window as any
+      if (!w.echarts) {
+        el.innerHTML = `<pre style="color:var(--text-warning)">ECharts library failed to load</pre>`
+        return
+      }
+      const option = JSON.parse(optionJson)
+      const chart = w.echarts.init(el)
+      chart.setOption(option)
+      new ResizeObserver(() => chart.resize()).observe(el)
+    } catch (e: any) {
+      el.innerHTML = `<pre style="color:var(--text-warning)">ECharts error: ${e.message}</pre>`
+    }
+  })
 }
 
 function sameToken(left: MarkdownToken, right: MarkdownToken | undefined) {
