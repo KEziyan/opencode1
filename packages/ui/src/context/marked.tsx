@@ -2,6 +2,7 @@ import { marked } from "marked"
 import markedKatex from "marked-katex-extension"
 import markedShiki from "marked-shiki"
 import katex from "katex"
+import { isServer } from "solid-js/web"
 import { bundledLanguages, type BundledLanguage } from "shiki"
 import { createSimpleContext } from "./helper"
 import { getSharedHighlighter, registerCustomTheme, ThemeRegistrationResolved } from "@pierre/diffs"
@@ -427,7 +428,7 @@ function renderMathExpressions(html: string): string {
 }
 
 async function highlightCodeBlocks(html: string): Promise<string> {
-  const codeBlockRegex = /<pre><code(?:\s+class="language-([^"]*)")?>([\s\S]*?)<\/code><\/pre>/g
+  const codeBlockRegex = /<pre><code(?:[^>]*class="language-([^"]*)")?>([\s\S]*?)<\/code><\/pre>/g
   const matches = [...html.matchAll(codeBlockRegex)]
   if (matches.length === 0) return html
 
@@ -440,6 +441,20 @@ async function highlightCodeBlocks(html: string): Promise<string> {
   let result = html
   for (const match of matches) {
     const [fullMatch, lang, escapedCode] = match
+
+    // Handle echarts blocks
+    if (lang === "echarts") {
+      const safe = escapedCode
+        .replace(/&lt;/g, "&lt;")
+        .replace(/&gt;/g, "&gt;")
+        .replace(/&amp;/g, "&amp;")
+        .replace(/&quot;/g, "&quot;")
+        .replace(/&#39;/g, "&#39;")
+      const container = `<div class="echarts-container" style="width:100%;height:400px;min-height:300px" data-echarts="${safe}"></div>`
+      result = result.replace(fullMatch, () => container)
+      continue
+    }
+
     const code = escapedCode
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
@@ -468,12 +483,86 @@ async function highlightCodeBlocks(html: string): Promise<string> {
 
 export type NativeMarkdownParser = (markdown: string) => Promise<string>
 
+function echartsContainer(text: string, lang: string): string | undefined {
+  if (lang !== "echarts") return undefined
+  const safe = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+  return `<div class="echarts-container" style="width:100%;height:400px;min-height:300px" data-echarts="${safe}"></div>`
+}
+
+function initEChartsObserver() {
+  if ((window as any).__echartsObserverInitialized) return
+  ;(window as any).__echartsObserverInitialized = true
+
+  const ensureECharts = (() => {
+    let promise: Promise<void> | null = null
+    return () => {
+      if ((window as any).echarts) return Promise.resolve()
+      if (promise) return promise
+      promise = new Promise<void>((resolve) => {
+        const script = document.createElement("script")
+        script.src = "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
+        script.onload = () => resolve()
+        script.onerror = () => resolve()
+        document.head.appendChild(script)
+      })
+      return promise
+    }
+  })()
+
+  async function initOne(el: HTMLElement) {
+    const optionRaw = el.getAttribute("data-echarts")
+    if (!optionRaw) return
+    try {
+      await ensureECharts()
+      if (!(window as any).echarts) return
+      const option = JSON.parse(optionRaw.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&"))
+      const chart = (window as any).echarts.init(el)
+      chart.setOption(option)
+      new ResizeObserver(() => chart.resize()).observe(el)
+    } catch {
+      // silent
+    }
+  }
+
+  const mo = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node instanceof HTMLElement) {
+          if (node.classList.contains("echarts-container") && !node.hasAttribute("data-echarts-initialized")) {
+            node.setAttribute("data-echarts-initialized", "true")
+            initOne(node)
+          }
+          if (node.querySelectorAll) {
+            node.querySelectorAll<HTMLElement>(".echarts-container:not([data-echarts-initialized])").forEach((el) => {
+              el.setAttribute("data-echarts-initialized", "true")
+              initOne(el)
+            })
+          }
+        }
+      }
+    }
+  })
+  if (document.body) mo.observe(document.body, { childList: true, subtree: true })
+  else window.addEventListener("DOMContentLoaded", () => mo.observe(document.body, { childList: true, subtree: true }))
+}
+
 export const { use: useMarked, provider: MarkedProvider } = createSimpleContext({
   name: "Marked",
   init: (props: { nativeParser?: NativeMarkdownParser }) => {
+    if (!isServer) initEChartsObserver()
+
     const jsParser = marked.use(
       {
         renderer: {
+          code({ text, lang }) {
+            const echarts = echartsContainer(text, lang ?? "")
+            if (echarts) return echarts
+            return false
+          },
           link({ href, title, text }) {
             const titleAttr = title ? ` title="${title}"` : ""
             return `<a href="${href}"${titleAttr} class="external-link" target="_blank" rel="noopener noreferrer">${text}</a>`
