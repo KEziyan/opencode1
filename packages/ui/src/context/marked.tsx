@@ -556,19 +556,6 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
     if (!isServer) initEChartsObserver()
 
     const jsParser = marked.use(
-      {
-        renderer: {
-          code({ text, lang }) {
-            const echarts = echartsContainer(text, lang ?? "")
-            if (echarts) return echarts
-            return false
-          },
-          link({ href, title, text }) {
-            const titleAttr = title ? ` title="${title}"` : ""
-            return `<a href="${href}"${titleAttr} class="external-link" target="_blank" rel="noopener noreferrer">${text}</a>`
-          },
-        },
-      },
       markedKatex({
         throwOnError: false,
         nonStandard: true,
@@ -593,6 +580,19 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
           })
         },
       }),
+      {
+        renderer: {
+          code({ text, lang }) {
+            const echarts = echartsContainer(text, lang ?? "")
+            if (echarts) return echarts
+            return false
+          },
+          link({ href, title, text }) {
+            const titleAttr = title ? ` title="${title}"` : ""
+            return `<a href="${href}"${titleAttr} class="external-link" target="_blank" rel="noopener noreferrer">${text}</a>`
+          },
+        },
+      },
     )
 
     if (props.nativeParser) {

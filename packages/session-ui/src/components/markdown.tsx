@@ -632,12 +632,12 @@ function updateEChartsBlock(
   scheduleECharts(id, block.option)
 }
 
-const echartsLoadingPromise: Promise<void> | null = null
+let echartsLoadingPromise: Promise<void> | null = null
 
 function ensureEChartsLoaded(): Promise<void> {
   if ((window as any).echarts) return Promise.resolve()
   if (echartsLoadingPromise) return echartsLoadingPromise
-  return new Promise<void>((resolve, reject) => {
+  echartsLoadingPromise = new Promise<void>((resolve) => {
     const script = document.createElement("script")
     script.src = "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
     script.onload = () => resolve()
@@ -661,7 +661,7 @@ function scheduleECharts(id: string, optionJson: string) {
       const chart = w.echarts.init(el)
       chart.setOption(option)
       new ResizeObserver(() => chart.resize()).observe(el)
-    } catch (e: any) {
+    } catch (e) {
       el.innerHTML = `<pre style="color:var(--text-warning)">ECharts error: ${e.message}</pre>`
     }
   })
