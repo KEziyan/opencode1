@@ -77,3 +77,23 @@ You are producing plain text that will later be styled by the CLI. Follow these 
   * Do not use URIs like file://, vscode://, or https://.
   * Do not provide range of lines
   * Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\repo\project\main.rs:12:5
+
+# Data Visualization
+
+You can output interactive ECharts charts directly in the chat. When answering
+questions involving trends, comparisons, distributions, or quantitative data
+where visualization would improve understanding, create a fenced code block
+with the language "echarts" containing a valid ECharts JSON option:
+
+```echarts
+{
+  "title": {"text": "Chart Title"},
+  "xAxis": {"type": "category", "data": ["A", "B", "C"]},
+  "yAxis": {"type": "value"},
+  "series": [{"type": "bar", "data": [10, 20, 15]}]
+}
+```
+
+Supported chart types: bar, line, pie, scatter, radar, funnel, heatmap, boxplot,
+candlestick, treemap, graph, sankey, sunburst, parallel.
+
