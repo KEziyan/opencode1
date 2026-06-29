@@ -483,15 +483,7 @@ async function highlightCodeBlocks(html: string): Promise<string> {
 
 export type NativeMarkdownParser = (markdown: string) => Promise<string>
 
-function echartsContainer(text: string, lang: string): string | undefined {
-  if (lang !== "echarts") return undefined
-  const safe = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-  return `<div class="echarts-container" style="width:100%;height:400px;min-height:300px" data-echarts="${safe}"></div>`
-}
+
 
 function initEChartsObserver() {
   if ((window as any).__echartsObserverInitialized) return
@@ -582,11 +574,6 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
       }),
       {
         renderer: {
-          code({ text, lang }) {
-            const echarts = echartsContainer(text, lang ?? "")
-            if (echarts) return echarts
-            return false
-          },
           link({ href, title, text }) {
             const titleAttr = title ? ` title="${title}"` : ""
             return `<a href="${href}"${titleAttr} class="external-link" target="_blank" rel="noopener noreferrer">${text}</a>`

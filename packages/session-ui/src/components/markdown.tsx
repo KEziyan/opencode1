@@ -609,10 +609,27 @@ function updateEChartsBlock(
   current: Element | undefined,
   block: Extract<RenderedBlock, { mode: "echarts" }>,
 ) {
-  const id = `ec-${block.key.replace(/[^a-zA-Z0-9-]/g, "")}`
   const existing = current instanceof HTMLDivElement && current.dataset.markdownKey === block.key ? current : undefined
+
+  // During streaming, skip chart init until code block is complete
+  if (!block.complete) {
+    if (!existing) {
+      const el = document.createElement("div")
+      el.dataset.markdownBlock = ""
+      el.dataset.markdownKey = block.key
+      el.dataset.markdownHash = block.hash
+      el.dataset.echartsOption = block.option
+      el.style.cssText = "width:100%;height:400px;min-height:300px"
+      el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-muted)">⏳ Chart rendering...</div>`
+      if (current) current.replaceWith(el)
+      else container.appendChild(el)
+    }
+    return
+  }
+
   if (existing && existing.dataset.echartsOption === block.option) return
 
+  const id = `ec-${block.key.replace(/[^a-zA-Z0-9-]/g, "")}`
   const el = document.createElement("div")
   el.id = id
   el.dataset.markdownBlock = ""
