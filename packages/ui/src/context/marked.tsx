@@ -554,6 +554,15 @@ export const { use: useMarked, provider: MarkedProvider } = createSimpleContext(
       }),
       markedShiki({
         async highlight(code, lang) {
+          // ECharts blocks: generate the echarts container div directly.
+          // The marked-shiki plugin uses the highlight return value as the
+          // full replacement HTML (via walkTokens), so the echarts-container
+          // div is rendered as-is. The MutationObserver in initEChartsObserver
+          // picks it up and initializes the chart.
+          if (lang === "echarts") {
+            const safe = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+            return `<div class="echarts-container" style="width:100%;height:400px;min-height:300px" data-echarts="${safe}"></div>`
+          }
           const highlighter = await getSharedHighlighter({
             themes: ["OpenCode"],
             langs: [],
