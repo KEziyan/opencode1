@@ -95,6 +95,11 @@ questions involving trends, comparisons, distributions, or quantitative data
 where visualization would improve understanding, create a fenced code block
 with the language "echarts" containing a valid ECharts JSON option.
 
+CRITICAL — Output ONLY the raw JSON object inside the echarts code block.
+Do NOT wrap it in HTML, add script or style tags, create an entire webpage,
+or use document.write/echarts.init/setOption calls. The rendering system
+handles initialization automatically.
+
 CRITICAL — The option MUST be valid JSON. Do NOT use JavaScript function() syntax
 anywhere in the option, including formatter, label, tooltip, etc. JSON does not
 support functions. Use ECharts template strings instead:
@@ -111,9 +116,7 @@ For themeRiver series, data format is [[date, value, category], ...] and it uses
 singleAxis instead of xAxis/yAxis. For timeline, use baseOption + options[] array
 structure.
 
-pictorialBar SVG icons may not render correctly; prefer built-in shapes.
-
-Example:
+Correct format (raw JSON only, no HTML):
 ```echarts
 {
   "title": {"text": "Chart Title"},
@@ -123,7 +126,10 @@ Example:
 }
 ```
 
-
+Incorrect format — NEVER output this:
+```html
+<!DOCTYPE html><html>...<script>...
+```
 # Code References
 
 When referencing specific functions or pieces of code include the pattern `file_path:line_number` to allow the user to easily navigate to the source code location.
