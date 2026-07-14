@@ -738,12 +738,12 @@ function scheduleECharts(id: string, optionJson: string) {
       await ensureEChartsLoaded()
       const w = window as any
       if (!w.echarts) {
-        el.innerHTML = \`<pre style="color:var(--text-warning)">ECharts library failed to load</pre>\`
+        el.innerHTML = `<pre style="color:var(--text-warning)">ECharts library failed to load</pre>`
         return
       }
       const option = parseEChartsOption(optionJson)
       if (!option || !option.series) {
-        el.innerHTML = \`<pre style="color:var(--text-warning)">Invalid ECharts option: missing series</pre>\`
+        el.innerHTML = `<pre style="color:var(--text-warning)">Invalid ECharts option: missing series</pre>`
         return
       }
       const chart = w.echarts.init(el, undefined, { renderer: "canvas" })
@@ -752,7 +752,7 @@ function scheduleECharts(id: string, optionJson: string) {
     } catch (e: any) {
       const msg = e?.message ?? String(e)
       console.error("[ECharts] render failed for", id, msg, optionJson.slice(0, 200))
-      el.innerHTML = \`<pre style="color:var(--text-warning)">ECharts error: \${msg}</pre>\`
+      el.innerHTML = `<pre style="color:var(--text-warning)">ECharts error: ${msg}</pre>`
     }
   })
 }
