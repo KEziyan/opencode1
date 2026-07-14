@@ -658,9 +658,76 @@ function ensureEChartsLoaded(): Promise<void> {
     const script = document.createElement("script")
     script.src = "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
     script.onload = () => resolve()
-    script.onerror = () => resolve() // resolve anyway to avoid breaking the UI
+    script.onerror = () => {
+      const fallback = document.createElement("script")
+      fallback.src = "https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"
+      fallback.onload = () => resolve()
+      fallback.onerror = () => resolve()
+      document.head.appendChild(fallback)
+    }
     document.head.appendChild(script)
   }) as Promise<void>
+}
+
+function parseEChartsOption(raw: string): any {
+  try { return JSON.parse(raw) } catch { /* try function-aware parse */ }
+
+  let result = raw
+  const funcs: Array<{ params: string; body: string }> = []
+  const re = /"(\w+)"\s*:\s*function\s*\(([^)]*)\)\s*\{/g
+  let m: RegExpExecArray | null
+
+  while ((m = re.exec(result)) !== null) {
+    const key = m[1]
+    const p = m[2]
+    const bodyStart = m.index + m[0].indexOf("{") + 1
+    let depth = 1
+    let pos = bodyStart
+    while (depth > 0 && pos < result.length) {
+      if (result[pos] === "{") depth++
+      else if (result[pos] === "}") depth--
+      pos++
+    }
+    const body = result.slice(bodyStart, pos - 1)
+    const funcEnd = pos
+    const idx = funcs.length
+    funcs.push({ params: p, body })
+    result = result.slice(0, m.index) + '"' + key + '":"__ECHARTS_FN_' + idx + '__"' + result.slice(funcEnd)
+    re.lastIndex = m.index + 1
+  }
+
+  const parsed = JSON.parse(result)
+
+  function walkReplace(obj: any) {
+    if (Array.isArray(obj)) {
+      for (let i = 0; i < obj.length; i++) {
+        const val = obj[i]
+        if (typeof val === "string" && val.startsWith("__ECHARTS_FN_")) {
+          const idx = parseInt(val.slice(14, -2), 10)
+          if (!isNaN(idx) && idx < funcs.length) {
+            try { obj[i] = new Function("return function(" + funcs[idx].params + ") { " + funcs[idx].body + " }")() } catch {}
+          }
+        } else if (typeof val === "object" && val !== null) {
+          walkReplace(val)
+        }
+      }
+    } else if (typeof obj === "object" && obj !== null) {
+      for (const k of Object.keys(obj)) {
+        const val = obj[k]
+        if (typeof val === "string" && val.startsWith("__ECHARTS_FN_")) {
+          const idx = parseInt(val.slice(14, -2), 10)
+          if (!isNaN(idx) && idx < funcs.length) {
+            try { obj[k] = new Function("return function(" + funcs[idx].params + ") { " + funcs[idx].body + " }")() } catch {}
+          }
+        } else if (typeof val === "object" && val !== null) {
+          walkReplace(val)
+        }
+      }
+    }
+  }
+
+  walkReplace(parsed)
+  return parsed
 }
 
 function scheduleECharts(id: string, optionJson: string) {
@@ -671,15 +738,21 @@ function scheduleECharts(id: string, optionJson: string) {
       await ensureEChartsLoaded()
       const w = window as any
       if (!w.echarts) {
-        el.innerHTML = `<pre style="color:var(--text-warning)">ECharts library failed to load</pre>`
+        el.innerHTML = \`<pre style="color:var(--text-warning)">ECharts library failed to load</pre>\`
         return
       }
-      const option = JSON.parse(optionJson)
-      const chart = w.echarts.init(el)
+      const option = parseEChartsOption(optionJson)
+      if (!option || !option.series) {
+        el.innerHTML = \`<pre style="color:var(--text-warning)">Invalid ECharts option: missing series</pre>\`
+        return
+      }
+      const chart = w.echarts.init(el, undefined, { renderer: "canvas" })
       chart.setOption(option)
       new ResizeObserver(() => chart.resize()).observe(el)
-    } catch (e) {
-      el.innerHTML = `<pre style="color:var(--text-warning)">ECharts error: ${e.message}</pre>`
+    } catch (e: any) {
+      const msg = e?.message ?? String(e)
+      console.error("[ECharts] render failed for", id, msg, optionJson.slice(0, 200))
+      el.innerHTML = \`<pre style="color:var(--text-warning)">ECharts error: \${msg}</pre>\`
     }
   })
 }
