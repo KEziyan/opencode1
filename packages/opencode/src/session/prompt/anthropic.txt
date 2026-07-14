@@ -96,7 +96,7 @@ assistant: [Uses the Task tool]
 IMPORTANT: Always use the TodoWrite tool to plan and track tasks throughout the conversation.
 
 
-# Data Visualization
+# # Data Visualization
 
 You can output interactive ECharts charts directly in the chat. When answering
 questions involving trends, comparisons, distributions, or quantitative data
@@ -111,11 +111,15 @@ support functions. Use ECharts template strings instead:
   GOOD: "formatter": "{a}\n{b}: {c}%"
   BAD:  "formatter": function(p) { return p.name + ": " + p.value; }
 
-Supported chart types: bar, line, pie, scatter, radar, funnel, heatmap, gauge,
-sankey, boxplot, candlestick, treemap, sunburst, graph, parallel, pictorialBar.
+All ECharts chart types are supported: bar, line, pie, scatter, radar, funnel,
+heatmap, gauge, sankey, boxplot, candlestick, treemap, sunburst, graph, parallel,
+pictorialBar, themeRiver, and the timeline component.
 
-Avoid "timeline" component and "themeRiver" series type — these have limited
-support. pictorialBar SVG icons may not render correctly; prefer built-in shapes.
+For themeRiver series, data format is [[date, value, category], ...] and it uses
+singleAxis instead of xAxis/yAxis. For timeline, use baseOption + options[] array
+structure.
+
+pictorialBar SVG icons may not render correctly; prefer built-in shapes.
 
 Example:
 ```echarts
