@@ -673,13 +673,13 @@ function parseEChartsOption(raw: string): any {
   try { return JSON.parse(raw) } catch { /* try function-aware parse */ }
 
   let result = raw
-  const funcs: string[] = []
+  const funcs: Array<{ params: string; body: string }> = []
   const re = /"(\w+)"\s*:\s*function\s*\(([^)]*)\)\s*\{/g
   let m: RegExpExecArray | null
 
   while ((m = re.exec(result)) !== null) {
     const key = m[1]
-    const params = m[2]
+    const p = m[2]
     const bodyStart = m.index + m[0].indexOf("{") + 1
     let depth = 1
     let pos = bodyStart
@@ -691,19 +691,42 @@ function parseEChartsOption(raw: string): any {
     const body = result.slice(bodyStart, pos - 1)
     const funcEnd = pos
     const idx = funcs.length
-    funcs.push(body)
+    funcs.push({ params: p, body })
     result = result.slice(0, m.index) + '"' + key + '":"__ECHARTS_FN_' + idx + '__"' + result.slice(funcEnd)
-    re.lastIndex = m.index + key.length + 1
+    re.lastIndex = m.index + 1
   }
 
   const parsed = JSON.parse(result)
-  for (let i = 0; i < funcs.length; i++) {
-    for (const k of Object.keys(parsed)) {
-      if (typeof parsed[k] === "string" && parsed[k] === "__ECHARTS_FN_" + i + "__") {
-        try { parsed[k] = new Function("return function(" + params + ") { " + funcs[i] + " }")() } catch {}
+
+  function walkReplace(obj: any) {
+    if (Array.isArray(obj)) {
+      for (let i = 0; i < obj.length; i++) {
+        const val = obj[i]
+        if (typeof val === "string" && val.startsWith("__ECHARTS_FN_")) {
+          const idx = parseInt(val.slice(14, -2), 10)
+          if (!isNaN(idx) && idx < funcs.length) {
+            try { obj[i] = new Function("return function(" + funcs[idx].params + ") { " + funcs[idx].body + " }")() } catch {}
+          }
+        } else if (typeof val === "object" && val !== null) {
+          walkReplace(val)
+        }
+      }
+    } else if (typeof obj === "object" && obj !== null) {
+      for (const k of Object.keys(obj)) {
+        const val = obj[k]
+        if (typeof val === "string" && val.startsWith("__ECHARTS_FN_")) {
+          const idx = parseInt(val.slice(14, -2), 10)
+          if (!isNaN(idx) && idx < funcs.length) {
+            try { obj[k] = new Function("return function(" + funcs[idx].params + ") { " + funcs[idx].body + " }")() } catch {}
+          }
+        } else if (typeof val === "object" && val !== null) {
+          walkReplace(val)
+        }
       }
     }
   }
+
+  walkReplace(parsed)
   return parsed
 }
 
