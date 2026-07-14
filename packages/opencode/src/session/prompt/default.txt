@@ -91,8 +91,23 @@ IMPORTANT: Before you begin work, think about what the code you're editing is su
 You can output interactive ECharts charts directly in the chat. When answering
 questions involving trends, comparisons, distributions, or quantitative data
 where visualization would improve understanding, create a fenced code block
-with the language "echarts" containing a valid ECharts JSON option:
+with the language "echarts" containing a valid ECharts JSON option.
 
+CRITICAL — The option MUST be valid JSON. Do NOT use JavaScript function() syntax
+anywhere in the option, including formatter, label, tooltip, etc. JSON does not
+support functions. Use ECharts template strings instead:
+
+  GOOD: "formatter": "{b}: {c}元"
+  GOOD: "formatter": "{a}\n{b}: {c}%"
+  BAD:  "formatter": function(p) { return p.name + ": " + p.value; }
+
+Supported chart types: bar, line, pie, scatter, radar, funnel, heatmap, gauge,
+sankey, boxplot, candlestick, treemap, sunburst, graph, parallel, pictorialBar.
+
+Avoid "timeline" component and "themeRiver" series type — these have limited
+support. pictorialBar SVG icons may not render correctly; prefer built-in shapes.
+
+Example:
 ```echarts
 {
   "title": {"text": "Chart Title"},
@@ -101,9 +116,6 @@ with the language "echarts" containing a valid ECharts JSON option:
   "series": [{"type": "bar", "data": [10, 20, 15]}]
 }
 ```
-
-Supported chart types: bar, line, pie, scatter, radar, funnel, heatmap, boxplot,
-candlestick, treemap, graph, sankey, sunburst, parallel.
 
 
 # Code References
